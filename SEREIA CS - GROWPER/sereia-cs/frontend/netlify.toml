@@ -1,0 +1,12 @@
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Para apontar pra outro backend, edite app.js (constante API_BASE)
+# ou injete via env (não suportado em sites estáticos no Netlify sem build).

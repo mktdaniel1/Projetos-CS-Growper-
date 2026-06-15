@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sereia CS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ========================= LOGIN ========================= -->
+  <section id="login-view" class="login-view">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-icon"><i class="ti ti-headset"></i></div>
+        <div>
+          <h1>Sereia CS</h1>
+          <p>Atendimento via WhatsApp</p>
+        </div>
+      </div>
+      <label class="login-label">Token de acesso</label>
+      <input type="password" id="token-input" placeholder="••••••••••" autocomplete="off" />
+      <button id="login-btn" class="primary-btn">Entrar</button>
+      <p id="login-error" class="login-error"></p>
+    </div>
+  </section>
+
+  <!-- ========================= DASHBOARD ========================= -->
+  <main id="dashboard-view" class="dashboard hidden">
+
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon"><i class="ti ti-headset"></i></div>
+        <div>
+          <h1>Sereia CS</h1>
+          <p>Atendimento via WhatsApp · <span id="header-clientes">180</span> clientes</p>
+        </div>
+      </div>
+      <div class="header-status">
+        <span class="status-dot" id="ws-dot"></span>
+        <span id="ws-label">conectando</span>
+        <button class="ghost-btn" id="logout-btn" title="Sair"><i class="ti ti-logout"></i></button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="volume">Volume</button>
+      <button class="tab" data-tab="sla">SLA</button>
+      <button class="tab" data-tab="backlog">
+        Backlog ao vivo
+        <span class="tab-badge hidden" id="tab-badge-backlog">0</span>
+      </button>
+      <button class="tab" data-tab="reincidencia">Reincidência</button>
+    </nav>
+
+    <!-- ============ ABA VOLUME ============ -->
+    <section class="tab-panel" id="panel-volume">
+      <div class="cards-row">
+        <div class="metric-card">
+          <p class="metric-label">Hoje</p>
+          <p class="metric-value" id="metric-hoje">—</p>
+          <p class="metric-delta" id="metric-hoje-delta">&nbsp;</p>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Esta semana</p>
+          <p class="metric-value" id="metric-semana">—</p>
+          <p class="metric-delta" id="metric-semana-delta">&nbsp;</p>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Este mês</p>
+          <p class="metric-value" id="metric-mes">—</p>
+          <p class="metric-delta" id="metric-mes-delta">&nbsp;</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Chamados por dia · últimos 30 dias</h2>
+          <div class="legend">
+            <span><span class="legend-line legend-line-orange"></span>abertos</span>
+            <span><span class="legend-line legend-line-purple"></span>resolvidos</span>
+          </div>
+        </div>
+        <svg id="timeseries" viewBox="0 0 700 180"></svg>
+      </div>
+
+      <div class="card">
+        <h2>Concentração por dia × hora</h2>
+        <div id="heatmap" class="heatmap"></div>
+        <div class="heatmap-legend">
+          <span>menos</span>
+          <span class="hm-cell hm-0"></span>
+          <span class="hm-cell hm-1"></span>
+          <span class="hm-cell hm-2"></span>
+          <span class="hm-cell hm-3"></span>
+          <span class="hm-cell hm-4"></span>
+          <span>mais</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Clientes que mais abriram este mês</h2>
+          <span class="muted">top 10 de <span id="total-clientes">180</span></span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th class="num">Mês</th>
+              <th class="num">% resolvido</th>
+              <th class="num">Tendência 30d</th>
+            </tr>
+          </thead>
+          <tbody id="top-clientes-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ ABA BACKLOG ============ -->
+    <section class="tab-panel hidden" id="panel-backlog">
+      <div class="backlog-kpis">
+        <div class="backlog-kpi">
+          <span class="dot dot-green"></span>
+          <div><div class="kpi-num" id="kpi-ok">0</div><div class="kpi-sub">menos de 30 min</div></div>
+        </div>
+        <div class="backlog-kpi">
+          <span class="dot dot-amber"></span>
+          <div><div class="kpi-num" id="kpi-atencao">0</div><div class="kpi-sub">30 min a 2 h</div></div>
+        </div>
+        <div class="backlog-kpi">
+          <span class="dot dot-red"></span>
+          <div><div class="kpi-num" id="kpi-critico">0</div><div class="kpi-sub">mais de 2 h</div></div>
+        </div>
+        <div class="backlog-kpi">
+          <i class="ti ti-clock"></i>
+          <div><div class="kpi-num" id="kpi-tempo">0 min</div><div class="kpi-sub">tempo médio aguardando</div></div>
+        </div>
+      </div>
+
+      <div class="card no-pad">
+        <div class="backlog-head">
+          <div></div>
+          <div>Cliente</div>
+          <div>Aberto há</div>
+          <div>Última mensagem</div>
+          <div class="right">Responsável</div>
+        </div>
+        <div id="backlog-list"></div>
+        <div class="backlog-empty hidden" id="backlog-empty">
+          <i class="ti ti-mood-smile"></i>
+          <p>Fila zerada. Bom trabalho.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ABA SLA (placeholder) ============ -->
+    <section class="tab-panel hidden" id="panel-sla">
+      <div class="placeholder">
+        <i class="ti ti-stopwatch"></i>
+        <h3>SLA detalhado</h3>
+        <p>Em breve: tempo médio até 1ª resposta, tempo até resolução, p50/p90/p99, comparativo por operador.</p>
+      </div>
+    </section>
+
+    <!-- ============ ABA REINCIDÊNCIA (placeholder) ============ -->
+    <section class="tab-panel hidden" id="panel-reincidencia">
+      <div class="placeholder">
+        <i class="ti ti-refresh-alert"></i>
+        <h3>Reincidência</h3>
+        <p>Em breve: clientes que voltaram com o mesmo problema em até 24h, ranking de contas pré-churn.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.0/dist/socket.io.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
