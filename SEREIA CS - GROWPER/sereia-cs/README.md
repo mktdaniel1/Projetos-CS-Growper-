@@ -1,85 +1,129 @@
-# Sereia CS
+# Sereia CS — Backend
 
-Sistema de ticketing observacional sobre WhatsApp para o time de Customer Success da operação revisional. Lê mensagens dos 180 grupos via webhooks do 2chat (Alice), classifica via Claude Haiku, fecha chamados por reação ✅, e expõe métricas + backlog ao vivo num dashboard.
+Sistema de ticketing observacional sobre WhatsApp para o time de Customer Success. Lê mensagens dos grupos via webhooks do 2chat, classifica via Claude Haiku, e expõe métricas + backlog ao vivo.
 
-## Visão geral
+## Stack
+
+- Node 20 + Express + Socket.IO
+- Postgres
+- Claude Haiku (classificador)
+- 2chat (captura WhatsApp)
+- Railway (hospedagem)
+
+## Estrutura
 
 ```
-180 grupos WhatsApp
-        │
-        ▼
-  2chat (Alice)  ─────►  Alice (continua intocada)
-        │
-        ▼ webhook subscription paralela
-  sereia-cs-backend (Railway)
-        │
-        ├─► Postgres (chamados, mensagens)
-        ├─► Claude Haiku (classifica msg do cliente)
-        └─► Socket.IO (atualiza dashboard ao vivo)
-                │
-                ▼
-        sereia-cs-frontend (Netlify)
+src/
+  server.js       Entry point (Express + Socket.IO)
+  db.js           Pool Postgres + helper query/tx
+  webhook.js      Handler unificado dos eventos do 2chat
+  classifier.js   Classificação via Claude com heurística rápida no front
+  api.js          Endpoints REST para o dashboard
+  ws.js           Setup Socket.IO + helpers de emissão
+  migrate.js      Aplica schema.sql
+  scripts/
+    subscribe-webhooks.js  Cadastra os webhooks no 2chat
+schema.sql        DDL completo
 ```
 
-## Repositórios sugeridos
-
-- `mktdaniel1/sereia-cs-backend` — pasta `backend/`
-- `mktdaniel1/sereia-cs-frontend` — pasta `frontend/`
-
-## Ordem de deploy
-
-1. **Backend no Railway**
-   - Subir o conteúdo de `backend/`
-   - Adicionar Postgres ao projeto
-   - Configurar variáveis (ver `backend/.env.example`)
-   - Rodar `npm run migrate` na shell
-   - Rodar `npm run subscribe` para registrar webhooks no 2chat
-
-2. **Cadastrar grupos e funcionários**
-   - **Funcionários PRIMEIRO**: todos os números do time do Growper (CS, marketing, financeiro, suporte) via `POST /api/funcionarios`. **Esquecer um funcionário = mensagens dele viram chamados-fantasma.**
-   - 180 grupos via `POST /api/clientes`
-   - Confirmar com `GET /api/funcionarios` antes de virar a chave
-
-3. **Frontend no Netlify**
-   - Subir o conteúdo de `frontend/`
-   - Ajustar `API_BASE` no `app.js` para a URL do Railway
-   - Adicionar a URL do Netlify em `FRONTEND_URL` do backend (CORS)
-
-## Cadastro em massa dos 180 clientes
-
-Sugestão: exportar do 2chat a lista de grupos (session_keys), e rodar um for loop:
+## Setup local
 
 ```bash
-# clientes.csv com colunas: nome,session_key
-while IFS=, read -r nome session_key; do
-  curl -s -X POST https://sereia-cs.up.railway.app/api/clientes \
-    -H "X-CS-Token: $TOKEN" \
-    -H "Content-Type: application/json" \
-    -d "{\"nome\":\"$nome\",\"session_key\":\"$session_key\"}"
-done < clientes.csv
+cp .env.example .env
+# edite .env com suas credenciais
+npm install
+npm run migrate
+npm run dev
 ```
 
-## Próximos passos (pós-MVP)
+## Deploy no Railway
 
-- **F2 — Aba SLA**: p50/p90 do T1R e TTR, comparativo por operador
-- **F3 — Aba Reincidência**: clientes que voltaram em <24h, ranking pré-churn
-- **F4 — Categorização visível**: gráfico de pizza do mix de assuntos (a categoria já é capturada pelo classificador, falta exibir)
-- **F5 — Alertas**: webhook Slack/Telegram quando backlog > X ou SLA estourar
-- **Integração com Sereia CRM**: unificar login e tabela de operadores
+1. Crie um novo projeto e adicione um Postgres.
+2. Suba este diretório como serviço (conecte ao GitHub `mktdaniel1/sereia-cs-backend`).
+3. Configure as variáveis:
+   - `DATABASE_URL` (Railway autopopula)
+   - `ANTHROPIC_API_KEY`
+   - `TWOCHAT_API_KEY`
+   - `TWOCHAT_CHANNEL_UUID` (uuid da instância Alice no 2chat)
+   - `TWOCHAT_WEBHOOK_BASE_URL` (URL pública do serviço Railway)
+   - `CS_DASHBOARD_TOKEN` (token que o dashboard vai enviar)
+   - `FRONTEND_URL` (URL Netlify do dashboard)
+   - `BOT_PHONE_NUMBERS` (CSV - números da Alice e outros bots)
+4. Após primeiro deploy, rode `npm run migrate` na shell do Railway.
+5. Cadastre os webhooks no 2chat: `npm run subscribe`.
 
-## Notas técnicas
+## Cadastro inicial dos 180 clientes
 
-### Heurística rápida no classificador
-Para economizar custo da API Anthropic, mensagens curtas e óbvias (saudações puras, "ok", "obrigado") são classificadas sem chamar a API. Isso elimina ~60-70% das chamadas em grupos ativos.
+```bash
+curl -X POST https://sereia-cs.up.railway.app/api/clientes \
+  -H "X-CS-Token: $CS_DASHBOARD_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nome": "Platino Assessoria",
+    "session_key": "WW-WPN...-...@g.us",
+    "channel_phone_number": "+555199...",
+    "remote_phone_number": "...@g.us"
+  }'
+```
 
-### Idempotência
-Webhooks do 2chat podem ser reenviados em caso de falha de entrega. Toda inserção em `mensagens` é protegida por `msg_uuid unique`, então duplicidade é tratada graciosamente.
+Pra obter o `session_key` de cada grupo, olhe o campo `session_key` que vem nos webhooks do 2chat (formato `WW-WPN{uuid}-{remote}@g.us`).
 
-### Reincidência automática
-Quando um chamado é aberto, o backend verifica se houve outro chamado **resolvido** do mesmo cliente nas últimas 24h. Se houver, o novo chamado é marcado com `reincidente_de_id`, alimentando a aba Reincidência.
+## Cadastro de funcionários
 
-### Fechamento por reação
-Operador reage com ✅ em qualquer mensagem do chamado → backend identifica o chamado pela mensagem reagida → marca como `resolvido`. Reação 🚫 marca como `descartado` (não conta nas métricas — útil pra ruído).
+Todo número da equipe interna do Growper (CS, marketing, financeiro, suporte) que participa dos grupos via WhatsApp pessoal precisa estar cadastrado. **É por essa lista que o sistema distingue quem é equipe vs quem é cliente** — qualquer número não cadastrado falando num grupo é tratado como cliente.
 
-### Mensagens da Alice (bot)
-Configure `BOT_PHONE_NUMBERS` no `.env` com os telefones que devem ser tratados como bot. Essas mensagens entram no banco com `origem='bot'` e **não** disparam SLA de primeira resposta (só atendimento humano dispara).
+```bash
+curl -X POST https://sereia-cs.up.railway.app/api/funcionarios \
+  -H "X-CS-Token: $CS_DASHBOARD_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"nome": "Brenda", "telefone": "5511999998888", "setor": "cs"}'
+```
+
+`setor` aceita: `cs`, `marketing`, `financeiro`, `suporte`, `outro`.
+
+Operadores que só usam o painel do 2chat (não falam pelo WhatsApp pessoal) também podem ser cadastrados — não obrigatório, mas ajuda a atribuir corretamente a reação ✅.
+
+## Endpoints
+
+| Método | Rota                          | Descrição                              |
+|--------|-------------------------------|----------------------------------------|
+| GET    | `/health`                     | Health check                           |
+| POST   | `/webhook/2chat`              | Recebe webhooks do 2chat               |
+| GET    | `/api/metrics/overview`       | Cards de hoje / semana / mês           |
+| GET    | `/api/metrics/timeseries`     | Série temporal (?days=30)              |
+| GET    | `/api/metrics/heatmap`        | Heatmap dia × hora (30d)               |
+| GET    | `/api/metrics/top-clientes`   | Top N clientes do período              |
+| GET    | `/api/backlog`                | Chamados em aberto + resumo            |
+| POST   | `/api/clientes`               | Cadastra/atualiza grupo-cliente        |
+| GET    | `/api/clientes`               | Lista grupos cadastrados               |
+| POST   | `/api/funcionarios`           | Cadastra/atualiza funcionário interno  |
+| GET    | `/api/funcionarios`           | Lista funcionários                     |
+| GET    | `/api/contatos/:clienteId`    | Contatos vistos num grupo              |
+
+Todos os endpoints `/api/*` exigem header `X-CS-Token`.
+
+## Identificação cliente vs funcionário
+
+**Esta é a regra mais importante do sistema.** O mesmo número da Alice está em grupos de várias áreas (marketing, financeiro, CS). Dentro de cada grupo há funcionários do Growper falando pelo WhatsApp pessoal + pessoas do cliente.
+
+A classificação acontece **por telefone do remetente**:
+
+1. `sent_by === 'api'` ou telefone em `BOT_PHONE_NUMBERS` → **bot** (Alice)
+2. Telefone na tabela `funcionarios` → **funcionario** (resposta da equipe)
+3. Qualquer outro telefone → **cliente** (potencial demanda)
+
+Por isso o cadastro completo dos funcionários é pré-requisito. Esquecer um funcionário = todas as mensagens dele viram chamados-fantasma de "cliente". Use `GET /api/contatos/:clienteId` periodicamente pra ver se aparece algum telefone com muitas mensagens que devia ser funcionário.
+
+## Métrica de tempo: aguardando vs aberto
+
+A coluna `aguardando_desde` em `chamados` guarda o timestamp da última mensagem do cliente que ainda não foi respondida.
+
+- Cliente fala → seta `aguardando_desde = enviado_em`
+- Funcionário responde → `aguardando_desde = null` (bola está com o cliente)
+- Cliente fala de novo → `aguardando_desde = enviado_em` (bola volta pra equipe)
+
+O semáforo do backlog usa `aguardando_desde`, não `aberto_em`. Um chamado de 8h pode estar verde (foi respondido recentemente e o cliente está pensando) e um de 30min pode estar vermelho (cliente mandou 3 mensagens há 30min sem resposta).
+
+## Reincidência
+
+Se um cliente abre um chamado novo em até 24h após o fechamento do anterior, o novo chamado é marcado com `reincidente_de_id` apontando pro original. Isso alimenta a aba Reincidência do dashboard.
